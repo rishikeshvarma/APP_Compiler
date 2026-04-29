@@ -1,0 +1,74 @@
+{
+  "endpoints": [
+    {
+      "path": "/api/v1/appointments/upcoming",
+      "method": "GET",
+      "description": "Fetch upcoming appointments for logged-in patient",
+      "validation": null
+    },
+    {
+      "path": "/api/v1/records/recent",
+      "method": "GET",
+      "description": "Fetch recent medical records for patient",
+      "validation": null
+    },
+    {
+      "path": "/api/v1/notifications/unread",
+      "method": "GET",
+      "description": "Fetch unread message counts",
+      "validation": null
+    },
+    {
+      "path": "/api/v1/patients/{patientId}/timeline",
+      "method": "GET",
+      "description": "Chronological history of patient medical events",
+      "validation": {
+        "patientId": "uuid"
+      }
+    },
+    {
+      "path": "/api/v1/doctor/queue",
+      "method": "GET",
+      "description": "Retrieve waiting patients with tier-based sorting",
+      "validation": {
+        "sort_by": "string",
+        "clinic_id": "uuid"
+      }
+    },
+    {
+      "path": "/api/v1/patients/{patientId}/vitals",
+      "method": "GET",
+      "description": "Retrieve specific vital signs for a patient chart",
+      "validation": {
+        "patientId": "uuid"
+      }
+    },
+    {
+      "path": "/api/v1/ai/diagnostics/{patientId}",
+      "method": "POST",
+      "description": "AI-driven differential diagnosis suggestions (Premium Only)",
+      "validation": {
+        "patientId": "uuid",
+        "symptoms": "array"
+      }
+    },
+    {
+      "path": "/api/v1/messages/send",
+      "method": "POST",
+      "description": "Secure E2E encrypted message sending",
+      "validation": {
+        "receiver_id": "uuid",
+        "ciphertext": "string"
+      }
+    },
+    {
+      "path": "/api/v1/admin/audit-logs",
+      "method": "GET",
+      "description": "Retrieve clinic-specific PHI access logs",
+      "validation": {
+        "start_date": "datetime",
+        "end_date": "datetime"
+      }
+    }
+  ]
+}

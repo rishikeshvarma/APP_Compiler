@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Node
+node_modules/
+dist/
+.eslintcache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local Artifacts
+/output/*.json
+/output/*.sql
+# Keep demo files
+!/output/demo_*.json
+!/output/demo_*.sql

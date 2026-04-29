@@ -1,0 +1,27 @@
+=== AppCompiler Benchmark Results ===
+Date: Wed Apr 29 23:03:01 2026
+
+{
+  "case": "Vague",
+  "success": true,
+  "validation_status": "SUCCESS",
+  "latency_sec": 3.01,
+  "repair_triggered": false
+}
+---
+{
+  "case": "Conflicting",
+  "success": true,
+  "validation_status": "SUCCESS",
+  "latency_sec": 3.01,
+  "repair_triggered": false
+}
+---
+{
+  "case": "Complex",
+  "success": true,
+  "validation_status": "SUCCESS",
+  "latency_sec": 3.01,
+  "repair_triggered": false
+}
+---
