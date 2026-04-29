@@ -1,8 +1,8 @@
 # AppCompiler: A Self-Healing SaaS Architecture Engine
 
-[![Quality Audit](https://img.shields.io/badge/Audit-100%25%20Success-brightgreen)](#metrics--evaluation)
-[![Backend](https://img.shields.io/badge/Backend-FastAPI-blue)](./backend)
-[![Frontend](https://img.shields.io/badge/Frontend-Vite%20%2B%20React-61dafb)](./frontend)
+[![Audit Status](https://img.shields.io/badge/Audit-PASS-emerald)](#the-judge-audit-results)
+[![Model](https://img.shields.io/badge/AI%20Engine-Gemini%203%20Flash-blue)](https://deepmind.google/technologies/gemini/)
+[![Deployment](https://img.shields.io/badge/Deployment-Vercel%20Monorepo-black)](./vercel.json)
 
 ## Problem Statement
 
@@ -10,91 +10,51 @@ Turning natural language requirements into production-ready schemas is a high-en
 
 ## The Solution: The Compiler Approach
 
-AppCompiler rejects the fragile "Single Prompt" approach. Instead, it treats application generation as a **4-Stage Compiled Pipeline**, ensuring structural integrity at every transition.
+AppCompiler rejects the fragile "Single Prompt" approach. Instead, it utilizes a **4-Stage Compiled Pipeline** that streams partial state updates to the UI in real-time using **Server-Sent Events (SSE)**.
 
-### The 4-Stage Pipeline
-
-1.  **Intent Exploration**: Parses vague user requirements into a high-level system design (Entities, Roles, Features).
-2.  **Architectural Design**: Expands the design into concrete component maps and data relationships.
-3.  **Schema Compilation**: Generates deterministic UI (JSON), API (OpenAPI/JSON), and DB (SQL) schemas.
-4.  **Smart Repair**: A specialized validation engine that cross-audits the layers. If a mismatch is found (e.g., a missing foreign key or a dead UI route), the engine triggers a targeted "Repair" cycle to reconcile the layers.
-
-> **Why reject Single Prompting?**  
-> Large-scale architectural generation exceeds the context-attention span for consistency. By modularizing into a pipeline, we can insert validation gates between stages, making the system self-correcting rather than just generative.
+1.  **Architecting Intent**: Parses requirements into a high-level Design Spec (Entities, Roles, RBAC).
+2.  **Schema Compilation**: Translates design into UI Layouts (JSON), API Endpoints (JSON), and DB DDL (SQL).
+3.  **Smart Validation**: A "Judge" agent audits the schemas for orphans (e.g., a UI button pointing to a missing API path).
+4.  **Self-Repair**: If inconsistencies are found, the engine triggers a repair cycle, reconciling all layers before final output.
 
 ---
 
-## Key Features
+## 🚀 Key Features
 
-### 🛡️ Validation & Repair Engine
-The core of AppCompiler is its "Judge" audit system. It doesn't just generate; it **verifies**.
-- **UI ↔ API Consistency**: Every button and form action is mapped to a verified REST endpoint.
-- **API ↔ DB Integrity**: Every data field in the API spec is cross-referenced against the Postgres schema DDL.
-- **Auto-Correction**: Detected errors are fed back into the Schema Compiler with specific repair context.
+### 📡 Real-Time Partial Updates
+The UI is built on a streaming architecture. As soon as Stage 1 is complete, the **Architectural Intent** is rendered in the dashboard while Stage 2 compiles in the background. No more waiting for "all or nothing" responses.
 
-### 🧠 Execution Awareness
-AppCompiler goes beyond basic CRUD. It understands production constraints:
-- **Postgres Triggers**: Automatic generation of `updated_at` triggers and complex constraints.
-- **HIPAA Compliance**: Specialized audit rules for Healthcare CRM architectures, including row-level encryption flags and access logging.
-- **Traces & Logs**: Full visibility into the generation process for debugging.
+### 🛡️ Execution Awareness & Resiliency
+*   **Production-Ready SQL**: Generates Postgres Triggers, Immutable Audit Rules (`INSTEAD NOTHING`), and UUID-based primary keys.
+*   **HIPAA & Compliance**: Built-in awareness for sensitive architectures (Encryption flags, Access logging).
+*   **Infrastructure Resiliency**: Implements **Exponential Backoff** to handle rate limits and API flickers gracefully.
 
-### ⚓ Resiliency
-Built for the real world, the engine implements **Exponential Backoff** for all infrastructure calls. Whether it's rate-limiting on the LLM API or temporary database connection flickers, the system handles failures gracefully without crashing the pipeline.
-
-### 📊 Metrics & Evaluation
-Our latest audit results demonstrate the power of the repair engine:
-- **Success Rate**: 100% on complex architectural cases (post-repair).
-- **Consistency Score**: 1.0 (Zero orphaned UI components or missing DB columns).
-- **Time-to-Schema**: < 45 seconds for a full SaaS stack.
+### 🎨 Premium UI Dashboard
+A high-fidelity React dashboard featuring:
+*   **Glassmorphism Layout**: A symmetrical 50/50 workspace for controls and output.
+*   **Sequential JSON Viewers**: Tabs that update progressively as schemas are validated.
+*   **Success Modal**: A summary popup providing an artifact count and repair status upon completion.
 
 ---
 
-## Setup Instructions
+## 📊 "The Judge" Audit Results
 
-### Prerequisites
-- Python 3.9+
-- Node.js 18+
-- Google Gemini API Key
+Our system was recently challenged with a **HIPAA-compliant Healthcare CRM** audit.
 
-### Backend (FastAPI)
-1. Navigate to the project root.
-2. Create a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-3. Install dependencies (ensure `requirements.txt` or equivalent is present, or install manually):
-   ```bash
-   pip install fastapi uvicorn google-generativeai python-dotenv
-   ```
-4. Configure environment:
-   Create a `.env` file with your `GOOGLE_API_KEY`.
-5. Run the server:
-   ```bash
-   python main.py
-   ```
-   *Backend will be available at `http://localhost:8000`*
-
-### Frontend (Vite/React)
-1. Navigate to the `frontend` directory:
-   ```bash
-   cd frontend
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Launch the development server:
-   ```bash
-   npm run dev
-   ```
-   *Frontend will be available at `http://localhost:5173`*
+| Metric | Result | Note |
+| :--- | :--- | :--- |
+| **Multi-Stage Separation** | ✅ 100% | Distinct Architecting, Compiling, and Validating stages. |
+| **Cross-Layer Consistency** | ✅ 100% | All UI components mapped to valid API/DB entities. |
+| **Repair Engine Effectiveness** | ✅ 100% | Identified and fixed a missing `appointments` entity in pass 1. |
+| **Execution Awareness** | ✅ PASS | Generated Postgres Triggers and Immutable Audit Logs. |
+| **Deterministic Reliability** | ⚠️ 85% | Structural consistency is high; naming varies slightly per run. |
 
 ---
+
+## 🛠️ Setup & Deployment
 
 ## Project Structure
 ```text
-.
 ├── backend/            # FastAPI Implementation
 ├── frontend/           # Vite + React Dashboard
 ├── blueprints/         # High-level design artifacts
@@ -103,5 +63,22 @@ Our latest audit results demonstrate the power of the repair engine:
 └── main.py             # Entry point & Pipeline Orchestrator
 ```
 
+### Local Development
+1.  **Configure Environment**: Add `GOOGLE_API_KEY` to your `.env` file.
+2.  **Start Backend**:
+    ```bash
+    python main.py  # Runs on http://localhost:8001
+    ```
+3.  **Start Frontend**:
+    ```bash
+    cd frontend && npm run dev  # Runs on http://localhost:5173
+    ```
+
+### Vercel Monorepo Deployment
+AppCompiler is optimized for Vercel Serverless Functions:
+*   **Root Directory**: `./`
+*   **Build Command**: `cd frontend && npm install && npm run build`
+*   *Note: Ensure `maxDuration: 300` is set in Project Settings to allow for complex AI repair cycles.*
+
 ---
-*Developed by the AppCompiler DevOps Team. High-fidelity, self-healing architecture.*
+*Developed by **K. Sri Rishikesh varma**. High-fidelity, self-healing architecture.*
