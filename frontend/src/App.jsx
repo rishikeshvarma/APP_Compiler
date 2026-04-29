@@ -16,6 +16,8 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('ui'); // ui, api, db
+  const [repairStatus, setRepairStatus] = useState(null); // SUCCESS, REPAIRED
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const logEndRef = useRef(null);
 
   useEffect(() => {
@@ -29,22 +31,69 @@ export default function App() {
     setLogs([{ step: "Initializing Pipeline...", status: "running" }]);
     setResult(null);
     setError(null);
+    setRepairStatus(null);
 
     try {
-      const response = await fetch(`${API_URL}/compile`, {
+      const response = await fetch(`/api/compile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       });
 
-      const data = await response.json();
-      
-      if (data.success) {
-        setLogs(data.logs);
-        setResult(data.final_schemas);
-      } else {
-        setError(data.error);
-        setLogs(prev => [...prev, { step: "Pipeline Failed", status: "error", error: data.error }]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.trim().startsWith('data: ')) {
+            const jsonStr = line.replace('data: ', '').trim();
+            if (!jsonStr) continue;
+            
+            try {
+              const data = JSON.parse(jsonStr);
+              
+              if (data.step) {
+                setLogs(prev => {
+                  const existing = prev.findIndex(l => l.step === data.step);
+                  if (existing !== -1) {
+                    const newLogs = [...prev];
+                    newLogs[existing] = { ...newLogs[existing], ...data };
+                    return newLogs;
+                  }
+                  return [...prev, data];
+                });
+
+                if (data.data && (data.step.includes('Compiling') || data.partial)) {
+                  setResult(data.data);
+                }
+                
+                if (data.repair_status) {
+                  setRepairStatus(data.repair_status);
+                  setResult(data.data);
+                }
+              }
+              
+              if (data.final) {
+                setShowSuccessPopup(true);
+              }
+
+              if (data.error) {
+                setError(data.error);
+                setLogs(prev => [...prev, { step: "Pipeline Failed", status: "error", error: data.error }]);
+              }
+            } catch (e) {
+              console.error("Failed to parse chunk:", jsonStr);
+            }
+          }
+        }
       }
     } catch (err) {
       setError("Failed to connect to backend. Is the server running?");
@@ -76,8 +125,8 @@ export default function App() {
 
       <main className="flex-1 flex overflow-hidden p-6 gap-6">
         {/* Left Column: Input & Logs */}
-        <div className="w-1/3 flex flex-col gap-6">
-          <section className="flex flex-col flex-1 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="w-1/2 flex flex-col gap-6">
+          <section className="flex flex-col h-72 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
             <div className="p-4 border-b border-slate-800 bg-slate-800/30">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-indigo-400" />
@@ -107,7 +156,7 @@ export default function App() {
             </div>
           </section>
 
-          <section className="h-64 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+          <section className="flex-1 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
             <div className="p-4 border-b border-slate-800 bg-slate-800/30">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <Layout className="w-4 h-4 text-indigo-400" />
@@ -134,7 +183,14 @@ export default function App() {
                     )}>
                       {log.step}
                     </p>
-                    {log.data && <p className="text-slate-500 mt-1 line-clamp-1 group-hover:line-clamp-none transition-all">Successfully extracted schema metadata.</p>}
+                    {log.data && log.step.includes('Architecting') && (
+                      <div className="mt-2 p-2 bg-slate-950 rounded border border-slate-800 text-[10px] text-slate-400 overflow-auto max-h-32">
+                        <pre className="whitespace-pre-wrap">{log.data}</pre>
+                      </div>
+                    )}
+                    {log.data && log.step.includes('Compiling') && (
+                      <p className="text-emerald-500/70 mt-1 italic">âœ” Schemas cached for validation...</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -144,7 +200,7 @@ export default function App() {
         </div>
 
         {/* Right Column: Schema Outputs */}
-        <div className="flex-1 flex flex-col bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="w-1/2 flex flex-col bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
           <div className="flex border-b border-slate-800 bg-slate-800/30">
             <button
               onClick={() => setActiveTab('ui')}
@@ -164,16 +220,27 @@ export default function App() {
             >
               <Globe className="w-4 h-4" /> API Endpoints
             </button>
-            <button
-              onClick={() => setActiveTab('db')}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-4 text-sm font-bold transition-all border-b-2",
-                activeTab === 'db' ? "border-amber-500 text-amber-400 bg-amber-500/5" : "border-transparent text-slate-500 hover:text-slate-300"
+              <button
+                onClick={() => setActiveTab('db')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-4 text-sm font-bold transition-all border-b-2",
+                  activeTab === 'db' ? "border-amber-500 text-amber-400 bg-amber-500/5" : "border-transparent text-slate-500 hover:text-slate-300"
+                )}
+              >
+                <Database className="w-4 h-4" /> DB Schema
+              </button>
+              {repairStatus && (
+                <div className={cn(
+                  "flex items-center gap-2 px-4 border-l border-slate-800",
+                  repairStatus === 'REPAIRED' ? "text-amber-400" : "text-emerald-400"
+                )}>
+                  <div className={cn("w-2 h-2 rounded-full animate-pulse", repairStatus === 'REPAIRED' ? "bg-amber-400" : "bg-emerald-400")} />
+                  <span className="text-[10px] font-bold uppercase tracking-tighter">
+                    {repairStatus === 'REPAIRED' ? "Self-Repaired" : "Valid"}
+                  </span>
+                </div>
               )}
-            >
-              <Database className="w-4 h-4" /> DB Schema
-            </button>
-          </div>
+            </div>
           
           <div className="flex-1 overflow-hidden relative">
             {!result && !error && (
@@ -216,6 +283,46 @@ export default function App() {
           </div>
         </div>
       </footer>
+ 
+      {/* Success Popup Modal */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl max-w-md w-full flex flex-col items-center text-center gap-6 animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20 shadow-lg shadow-emerald-500/10">
+              <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-white mb-2">Compilation Complete</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Your SaaS architecture engine has been successfully compiled and validated.
+                {repairStatus === 'REPAIRED' 
+                  ? " Minor consistency issues were detected and automatically repaired by the engine."
+                  : " The system passed all cross-layer integrity checks on the first pass."}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 w-full">
+              <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
+                <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">UI Pages</p>
+                <p className="text-sm font-bold text-white">{result?.ui_layout?.pages?.length || 0}</p>
+              </div>
+              <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
+                <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Endpoints</p>
+                <p className="text-sm font-bold text-white">{result?.api_endpoints?.endpoints?.length || 0}</p>
+              </div>
+              <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
+                <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Status</p>
+                <p className="text-sm font-bold text-emerald-400">Stable</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowSuccessPopup(false)}
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/20 transition-all active:scale-[0.98]"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
