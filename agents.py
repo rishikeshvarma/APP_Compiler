@@ -36,14 +36,17 @@ class SaaSCompiler:
         # Support both naming conventions
         api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise ValueError("API Key not found. Please set GOOGLE_API_KEY or GEMINI_API_KEY in your .env file.")
-        
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model_name)
+            print("⚠️ WARNING: GOOGLE_API_KEY not found. Compiler will fail on generation calls.")
+            self.model = None
+        else:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(model_name)
 
     @retry_with_backoff()
     def generate_design(self, prompt: str) -> str:
         """Calls Gemini to create a design spec."""
+        if not self.model:
+            raise RuntimeError("Gemini model not initialized. Check your GOOGLE_API_KEY.")
         print(f"[Agent] Generating design spec for: {prompt[:50]}...")
         system_prompt = """
         You are a Senior Systems Architect. Create a detailed Design Specification for a SaaS application.
@@ -60,6 +63,8 @@ class SaaSCompiler:
     @retry_with_backoff()
     def generate_schemas(self, design: str) -> Dict[str, Any]:
         """Calls Gemini to produce JSON/SQL artifacts."""
+        if not self.model:
+            raise RuntimeError("Gemini model not initialized. Check your GOOGLE_API_KEY.")
         print("[Agent] Generating schemas from design spec...")
         system_prompt = """
         You are a Full-Stack Schema Compiler. Based on the design specification, generate three artifacts:
@@ -91,6 +96,8 @@ class SaaSCompiler:
     @retry_with_backoff()
     def validate_and_repair(self, schemas: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
         """Checks for mismatches and repairs them using Gemini."""
+        if not self.model:
+            raise RuntimeError("Gemini model not initialized. Check your GOOGLE_API_KEY.")
         print("[Agent] Validating system integrity...")
         
         if not isinstance(schemas, dict):
