@@ -1,6 +1,6 @@
 # AppCompiler: A Self-Healing SaaS Architecture Engine
 
-[![Audit Status](https://img.shields.io/badge/Audit-PASS-emerald)](#the-judge-audit-results)
+[![evals](https://github.com/rishikeshvarma/APP_Compiler/actions/workflows/evals.yml/badge.svg)](https://github.com/rishikeshvarma/APP_Compiler/actions)
 [![Model](https://img.shields.io/badge/AI%20Engine-Gemini%203%20Flash-blue)](https://deepmind.google/technologies/gemini/)
 [![Deployment](https://img.shields.io/badge/Deployment-Vercel%20Monorepo-black)](./vercel.json)
 
@@ -37,17 +37,37 @@ A high-fidelity React dashboard featuring:
 
 ---
 
-## 📊 "The Judge" Audit Results
+## 🧪 Evals & Regression Tests
 
-Our system was recently challenged with a **HIPAA-compliant Healthcare CRM** audit.
+An eval harness (`evals/`) grades compiled output with **deterministic checks first** and an LLM-as-judge second, traces every pipeline step (latency, tokens, error class), and gates changes against a committed baseline. Infrastructure errors such as quota limits are reported separately and never counted as model failures.
 
-| Metric | Result | Note |
-| :--- | :--- | :--- |
-| **Multi-Stage Separation** | ✅ 100% | Distinct Architecting, Compiling, and Validating stages. |
-| **Cross-Layer Consistency** | ✅ 100% | All UI components mapped to valid API/DB entities. |
-| **Repair Engine Effectiveness** | ✅ 100% | Identified and fixed a missing `appointments` entity in pass 1. |
-| **Execution Awareness** | ✅ PASS | Generated Postgres Triggers and Immutable Audit Logs. |
-| **Deterministic Reliability** | ⚠️ 85% | Structural consistency is high; naming varies slightly per run. |
+Measured on the recorded HIPAA healthcare output (`evals/recorded/healthcare-hipaa.json`):
+
+| Check | Result |
+| :--- | :--- |
+| UI → API endpoint consistency (exact match, path params normalized) | ✅ pass |
+| Every API resource has a backing table | ✅ pass |
+| Foreign keys point at existing tables, no duplicate tables | ✅ pass |
+| Audit-log table present and protected from UPDATE/DELETE | ✅ pass |
+| A UI component reads a POST-only endpoint | ⚠️ warning |
+| `/doctor/*` and `/ai/*` paths cannot be mapped to a table by name | ⚠️ warning |
+
+Limits: only one output is recorded so far (the other 12 dataset cases are skipped until recorded with `--live --record`), and the LLM judge has not yet been calibrated against human labels.
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest -q                                                 # unit + regression tests, no API key
+python -m evals.runner --replay evals/recorded --no-judge           # re-grade recorded outputs, gate on baseline
+GOOGLE_API_KEY=... python -m evals.runner --live --record evals/recorded
+```
+
+### Bugs the harness found (each has a regression test)
+1. The validator never checked UI→API when `data_endpoint` was top-level, so the self-repair check was skipped for generated schemas.
+2. Prefix matching let `/api/v1/leads` pass when only `/api/v1/leads/hot` existed.
+3. Quota errors were scored as model failures (a committed run showed 0/10 purely from a 429).
+4. A per-day quota was retried with backoff for hours although it cannot recover.
+
+See [`evals/README.md`](evals/README.md) for the design.
 
 ---
 
@@ -55,10 +75,12 @@ Our system was recently challenged with a **HIPAA-compliant Healthcare CRM** aud
 
 ## Project Structure
 ```text
-├── backend/            # FastAPI Implementation
 ├── frontend/           # Vite + React Dashboard
 ├── blueprints/         # High-level design artifacts
 ├── schemas/            # Generated UI/API/DB outputs
+├── evals/              # Eval harness: checks, judge, tracing, dataset, runner
+├── tests/              # Unit + regression tests
+├── examples/           # Mock server (not the real pipeline)
 ├── agents.py           # Core LLM Agent logic
 └── main.py             # Entry point & Pipeline Orchestrator
 ```
@@ -72,6 +94,10 @@ Our system was recently challenged with a **HIPAA-compliant Healthcare CRM** aud
 3.  **Start Frontend**:
     ```bash
     cd frontend && npm run dev  # Runs on http://localhost:5173
+    ```
+4.  **Run Tests**:
+    ```bash
+    pip install -r requirements-dev.txt && python -m pytest -q
     ```
 
 ### Vercel Monorepo Deployment
