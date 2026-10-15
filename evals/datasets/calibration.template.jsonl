@@ -1,0 +1,1 @@
+{"_comment": "Copy this file to calibration.v1.jsonl. For ~15 real outputs, add rows: {case:{id,prompt}, schemas:{ui_layout,api_endpoints,db_schema}, human_pass:true|false}. Then run evals.judge.calibrate()."}

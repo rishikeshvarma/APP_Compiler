@@ -1,0 +1,95 @@
+{
+  "pages": [
+    {
+      "id": "patient_dashboard",
+      "title": "Patient Dashboard",
+      "role_access": [
+        "Patient"
+      ],
+      "components": [
+        {
+          "id": "appointment_summary",
+          "type": "SummaryCard",
+          "data_endpoint": "/api/v1/appointments/upcoming"
+        },
+        {
+          "id": "recent_results",
+          "type": "List",
+          "data_endpoint": "/api/v1/records/recent"
+        },
+        {
+          "id": "unread_notifications",
+          "type": "NotificationBadge",
+          "data_endpoint": "/api/v1/notifications/unread"
+        }
+      ]
+    },
+    {
+      "id": "medical_timeline",
+      "title": "Medical History Timeline",
+      "role_access": [
+        "Patient",
+        "Doctor"
+      ],
+      "components": [
+        {
+          "id": "history_feed",
+          "type": "ChronologicalFeed",
+          "data_endpoint": "/api/v1/patients/{patientId}/timeline"
+        }
+      ]
+    },
+    {
+      "id": "doctor_queue",
+      "title": "Patient Queue",
+      "role_access": [
+        "Doctor"
+      ],
+      "components": [
+        {
+          "id": "patient_list",
+          "type": "DataTable",
+          "data_endpoint": "/api/v1/doctor/queue",
+          "config": {
+            "premium_sorting": "priority_score",
+            "standard_sorting": "created_at"
+          }
+        }
+      ]
+    },
+    {
+      "id": "patient_chart",
+      "title": "Patient Chart View",
+      "role_access": [
+        "Doctor"
+      ],
+      "components": [
+        {
+          "id": "vitals_panel",
+          "type": "DataGrid",
+          "data_endpoint": "/api/v1/patients/{patientId}/vitals"
+        },
+        {
+          "id": "ai_assistant",
+          "type": "SidePanel",
+          "feature_gate": "FEATURE_DIAGNOSTIC_AI",
+          "data_endpoint": "/api/v1/ai/diagnostics/{patientId}"
+        }
+      ]
+    },
+    {
+      "id": "admin_audit_viewer",
+      "title": "Audit Logs",
+      "role_access": [
+        "Clinic Admin"
+      ],
+      "components": [
+        {
+          "id": "audit_table",
+          "type": "ImmutableTable",
+          "data_endpoint": "/api/v1/admin/audit-logs"
+        }
+      ]
+    }
+  ]
+}
