@@ -23,3 +23,7 @@ Thumbs.db
 # Keep demo files
 !/output/demo_*.json
 !/output/demo_*.sql
+
+# eval runs
+evals/runs/
+.pytest_cache/

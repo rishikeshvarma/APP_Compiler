@@ -1,3 +1,10 @@
+"""MOCK SERVER, NOT THE REAL PIPELINE.
+
+Moved from backend/main.py. When no API key is set it streams canned schemas, and its
+"validation" stage is a sleep with a hardcoded SUCCESS, so timings and results from this
+server say nothing about the compiler. The real pipeline is agents.py (served by main.py
+locally and api/index.py on Vercel); measure it with `python -m evals.runner`.
+"""
 import os
 import json
 import asyncio
