@@ -1,0 +1,7 @@
+{
+  "dataset_version": 1,
+  "pass_rate": 1.0,
+  "cases": {
+    "healthcare-hipaa": "pass"
+  }
+}

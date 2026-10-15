@@ -1,0 +1,178 @@
+{
+  "_note": "Copied from schemas/ in the repo. Original prompt, model and run are not recorded, so treat as a representative real output, not a reproducible run.",
+  "prompt": "Healthcare portal with HIPAA compliance, audit logs, and patient-doctor messaging",
+  "design": "",
+  "repairs": 0,
+  "schemas": {
+    "ui_layout": {
+      "pages": [
+        {
+          "id": "patient_dashboard",
+          "title": "Patient Dashboard",
+          "role_access": [
+            "Patient"
+          ],
+          "components": [
+            {
+              "id": "appointment_summary",
+              "type": "SummaryCard",
+              "data_endpoint": "/api/v1/appointments/upcoming"
+            },
+            {
+              "id": "recent_results",
+              "type": "List",
+              "data_endpoint": "/api/v1/records/recent"
+            },
+            {
+              "id": "unread_notifications",
+              "type": "NotificationBadge",
+              "data_endpoint": "/api/v1/notifications/unread"
+            }
+          ]
+        },
+        {
+          "id": "medical_timeline",
+          "title": "Medical History Timeline",
+          "role_access": [
+            "Patient",
+            "Doctor"
+          ],
+          "components": [
+            {
+              "id": "history_feed",
+              "type": "ChronologicalFeed",
+              "data_endpoint": "/api/v1/patients/{patientId}/timeline"
+            }
+          ]
+        },
+        {
+          "id": "doctor_queue",
+          "title": "Patient Queue",
+          "role_access": [
+            "Doctor"
+          ],
+          "components": [
+            {
+              "id": "patient_list",
+              "type": "DataTable",
+              "data_endpoint": "/api/v1/doctor/queue",
+              "config": {
+                "premium_sorting": "priority_score",
+                "standard_sorting": "created_at"
+              }
+            }
+          ]
+        },
+        {
+          "id": "patient_chart",
+          "title": "Patient Chart View",
+          "role_access": [
+            "Doctor"
+          ],
+          "components": [
+            {
+              "id": "vitals_panel",
+              "type": "DataGrid",
+              "data_endpoint": "/api/v1/patients/{patientId}/vitals"
+            },
+            {
+              "id": "ai_assistant",
+              "type": "SidePanel",
+              "feature_gate": "FEATURE_DIAGNOSTIC_AI",
+              "data_endpoint": "/api/v1/ai/diagnostics/{patientId}"
+            }
+          ]
+        },
+        {
+          "id": "admin_audit_viewer",
+          "title": "Audit Logs",
+          "role_access": [
+            "Clinic Admin"
+          ],
+          "components": [
+            {
+              "id": "audit_table",
+              "type": "ImmutableTable",
+              "data_endpoint": "/api/v1/admin/audit-logs"
+            }
+          ]
+        }
+      ]
+    },
+    "api_endpoints": {
+      "endpoints": [
+        {
+          "path": "/api/v1/appointments/upcoming",
+          "method": "GET",
+          "description": "Fetch upcoming appointments for logged-in patient",
+          "validation": null
+        },
+        {
+          "path": "/api/v1/records/recent",
+          "method": "GET",
+          "description": "Fetch recent medical records for patient",
+          "validation": null
+        },
+        {
+          "path": "/api/v1/notifications/unread",
+          "method": "GET",
+          "description": "Fetch unread message counts",
+          "validation": null
+        },
+        {
+          "path": "/api/v1/patients/{patientId}/timeline",
+          "method": "GET",
+          "description": "Chronological history of patient medical events",
+          "validation": {
+            "patientId": "uuid"
+          }
+        },
+        {
+          "path": "/api/v1/doctor/queue",
+          "method": "GET",
+          "description": "Retrieve waiting patients with tier-based sorting",
+          "validation": {
+            "sort_by": "string",
+            "clinic_id": "uuid"
+          }
+        },
+        {
+          "path": "/api/v1/patients/{patientId}/vitals",
+          "method": "GET",
+          "description": "Retrieve specific vital signs for a patient chart",
+          "validation": {
+            "patientId": "uuid"
+          }
+        },
+        {
+          "path": "/api/v1/ai/diagnostics/{patientId}",
+          "method": "POST",
+          "description": "AI-driven differential diagnosis suggestions (Premium Only)",
+          "validation": {
+            "patientId": "uuid",
+            "symptoms": "array"
+          }
+        },
+        {
+          "path": "/api/v1/messages/send",
+          "method": "POST",
+          "description": "Secure E2E encrypted message sending",
+          "validation": {
+            "receiver_id": "uuid",
+            "ciphertext": "string"
+          }
+        },
+        {
+          "path": "/api/v1/admin/audit-logs",
+          "method": "GET",
+          "description": "Retrieve clinic-specific PHI access logs",
+          "validation": {
+            "start_date": "datetime",
+            "end_date": "datetime"
+          }
+        }
+      ]
+    },
+    "db_schema": "CREATE TYPE user_role AS ENUM ('Patient', 'Doctor', 'Clinic Admin', 'System Admin');\nCREATE TYPE plan_tier AS ENUM ('Basic', 'Premium');\n\nCREATE TABLE clinics (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    name TEXT NOT NULL,\n    plan_type plan_tier DEFAULT 'Basic',\n    baa_signed_date TIMESTAMP WITH TIME ZONE,\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE TABLE users (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    clinic_id UUID REFERENCES clinics(id),\n    email_encrypted TEXT UNIQUE NOT NULL,\n    password_hash TEXT NOT NULL,\n    role user_role NOT NULL,\n    mfa_secret TEXT,\n    last_login TIMESTAMP WITH TIME ZONE\n);\n\nCREATE TABLE patient_profiles (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    user_id UUID REFERENCES users(id) ON DELETE CASCADE,\n    dob DATE NOT NULL,\n    ssn_encrypted TEXT,\n    insurance_info JSONB,\n    priority_score INT DEFAULT 0,\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE TABLE appointments (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    patient_id UUID REFERENCES patient_profiles(id),\n    doctor_id UUID REFERENCES users(id),\n    scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL,\n    status TEXT DEFAULT 'scheduled',\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE TABLE medical_records (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    patient_id UUID REFERENCES patient_profiles(id),\n    doctor_id UUID REFERENCES users(id),\n    data_type TEXT NOT NULL,\n    encrypted_payload TEXT NOT NULL,\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE TABLE messages (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    sender_id UUID REFERENCES users(id),\n    receiver_id UUID REFERENCES users(id),\n    ciphertext TEXT NOT NULL,\n    sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE TABLE notifications (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    user_id UUID REFERENCES users(id),\n    message_id UUID REFERENCES messages(id),\n    type TEXT NOT NULL,\n    is_read BOOLEAN DEFAULT FALSE,\n    delivered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE TABLE audit_logs (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    clinic_id UUID REFERENCES clinics(id),\n    actor_id UUID REFERENCES users(id),\n    action TEXT NOT NULL,\n    resource_id UUID,\n    ip_address INET,\n    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE RULE protect_audit_logs_update AS ON UPDATE TO audit_logs DO INSTEAD NOTHING;\nCREATE RULE protect_audit_logs_delete AS ON DELETE TO audit_logs DO INSTEAD NOTHING;\n\nCREATE OR REPLACE FUNCTION notify_on_message()\nRETURNS TRIGGER AS $$\nBEGIN\n    INSERT INTO notifications (user_id, message_id, type)\n    VALUES (NEW.receiver_id, NEW.id, 'NEW_MESSAGE');\n    RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n\nCREATE TRIGGER trg_message_notification\nAFTER INSERT ON messages\nFOR EACH ROW EXECUTE FUNCTION notify_on_message();"
+  }
+}
