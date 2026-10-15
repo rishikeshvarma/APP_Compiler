@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import google.generativeai as genai
@@ -8,6 +9,14 @@ from dotenv import load_dotenv
 
 # Load .env file from the current directory
 load_dotenv()
+
+_PATH_PARAM = re.compile(r"\{[^}]*\}|:[A-Za-z_]\w*|<[^>]*>")
+
+
+def _normalize_path(path: str) -> str:
+    """'/api/v1/patients/{patientId}/' and '/api/v1/patients/:id' -> '/api/v1/patients/{}'."""
+    return (_PATH_PARAM.sub("{}", path.split("?")[0].strip()).rstrip("/")) or "/"
+
 
 def retry_with_backoff(retries=10, initial_delay=10):
     def decorator(func):
@@ -20,6 +29,9 @@ def retry_with_backoff(retries=10, initial_delay=10):
                     return func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
+                    if re.search(r"PerDay|per_day", str(e)):
+                        # A per-day quota cannot recover in seconds; retrying for ~2.8h only hides the failure.
+                        raise
                     if "429" in str(e) or "quota" in str(e).lower():
                         print(f"⚠️ Rate limit hit. Retrying in {delay}s... (Attempt {i+1}/{retries})")
                         time.sleep(delay)
@@ -34,6 +46,8 @@ def retry_with_backoff(retries=10, initial_delay=10):
 class SaaSCompiler:
     def __init__(self, model_name: str = "gemini-3-flash-preview"):
         # Support both naming conventions
+        self.model_name = model_name
+        self.last_usage = (None, None)
         api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         if not api_key:
             print("⚠️ WARNING: GOOGLE_API_KEY not found. Compiler will fail on generation calls.")
@@ -41,6 +55,14 @@ class SaaSCompiler:
         else:
             genai.configure(api_key=api_key)
             self.model = genai.GenerativeModel(model_name)
+
+    def _generate(self, prompt, generation_config=None):
+        """Single choke point for model calls; records token usage so the eval harness can trace cost per step."""
+        kwargs = {"generation_config": generation_config} if generation_config is not None else {}
+        response = self.model.generate_content(prompt, **kwargs)
+        usage = getattr(response, "usage_metadata", None)
+        self.last_usage = (getattr(usage, "prompt_token_count", None), getattr(usage, "candidates_token_count", None)) if usage else (None, None)
+        return response
 
     @retry_with_backoff()
     def generate_design(self, prompt: str) -> str:
@@ -57,7 +79,7 @@ class SaaSCompiler:
         
         Return the design in Markdown format.
         """
-        response = self.model.generate_content(f"{system_prompt}\n\nUser Request: {prompt}")
+        response = self._generate(f"{system_prompt}\n\nUser Request: {prompt}")
         return response.text
 
     @retry_with_backoff()
@@ -80,7 +102,7 @@ class SaaSCompiler:
         }
         Ensure that all data_endpoints in the UI exist in the API, and all API endpoints have corresponding DB tables.
         """
-        response = self.model.generate_content(
+        response = self._generate(
             f"{system_prompt}\n\nDesign Spec:\n{design}",
             generation_config={"response_mime_type": "application/json"}
         )
@@ -114,25 +136,23 @@ class SaaSCompiler:
         
         issues = []
         
-        # 1. Check UI -> API mapping
+        # 1. Check UI -> API mapping (exact match on normalized paths; data_endpoint may be top-level or under props)
         api_paths = set()
         if isinstance(api, dict):
             endpoints = api.get("endpoints", [])
             if isinstance(endpoints, list):
                 for e in endpoints:
-                    if isinstance(e, dict):
-                        api_paths.add(e.get("path"))
+                    if isinstance(e, dict) and e.get("path"):
+                        api_paths.add(_normalize_path(e["path"]))
 
         if isinstance(ui, dict):
             for page in ui.get("pages", []):
                 if isinstance(page, dict):
                     for comp in page.get("components", []):
                         if isinstance(comp, dict):
-                            endpoint = comp.get("props", {}).get("data_endpoint")
-                            if endpoint:
-                                clean_endpoint = endpoint.split(":")[0].rstrip("/")
-                                if not any(p.startswith(clean_endpoint) for p in api_paths if p):
-                                    issues.append(f"UI component '{comp.get('component')}' references missing API path: {endpoint}")
+                            endpoint = comp.get("data_endpoint") or (comp.get("props") or {}).get("data_endpoint")
+                            if endpoint and _normalize_path(endpoint) not in api_paths:
+                                issues.append(f"UI component '{comp.get('component') or comp.get('id')}' references missing API path: {endpoint}")
 
         # 2. Check API -> DB mapping (Basic table existence check)
         if isinstance(api, dict):
@@ -173,7 +193,7 @@ class SaaSCompiler:
         }}
         """
         
-        response = self.model.generate_content(
+        response = self._generate(
             repair_prompt,
             generation_config={"response_mime_type": "application/json"}
         )
